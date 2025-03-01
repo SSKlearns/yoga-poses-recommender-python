@@ -6,6 +6,9 @@ from langchain_core.documents import Document
 from langchain_google_firestore import FirestoreVectorStore
 from langchain_google_vertexai import VertexAIEmbeddings
 from settings import get_settings
+from langchain_mongodb import MongoDBAtlasVectorSearch
+from pymongo import MongoClient
+from uuid import uuid4
 
 settings = get_settings()
 logging.basicConfig(
@@ -64,6 +67,25 @@ def create_langchain_documents(poses):
     return documents
 
 
+def create_mongodb_collection_and_search_index(embeddings):
+    # initialize MongoDB python client
+    client = MongoClient(settings.mongodb_atlas_cluster_uri)
+
+    mongodb_collection = client[settings.db_name][settings.collection_name]
+
+    vector_store = MongoDBAtlasVectorSearch(
+        collection=mongodb_collection,
+        embedding=embeddings,
+        index_name=settings.atlas_vector_search_index_name,
+        relevance_score_fn="cosine",
+    )
+
+    # Create vector search index on the collection
+    vector_store.create_vector_search_index(dimensions=int(settings.embedding_size))
+    
+    return vector_store
+
+
 def main():
     all_poses = load_yoga_poses_data_from_local_file(
         "./data/yoga_poses_with_descriptions.json"
@@ -79,14 +101,12 @@ def main():
         location=settings.location,
     )
 
-    client = firestore.Client(project=settings.project_id, database=settings.database)
+    vector_store = create_mongodb_collection_and_search_index(embeddings=embedding)
 
-    vector_store = FirestoreVectorStore.from_documents(
-        client=client,
-        collection=settings.test_collection,
-        documents=documents,
-        embedding=embedding,
-    )
+    uuids = [str(uuid4()) for _ in range(len(documents))]
+
+    vector_store.add_documents(documents=documents, ids=uuids)
+
     logging.info("Added documents to the vector store.")
 
 
