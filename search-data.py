@@ -2,12 +2,11 @@
 
 import argparse
 import logging
-
-from google.cloud import firestore
 from langchain_core.documents import Document
-from langchain_google_firestore import FirestoreVectorStore
 from langchain_google_vertexai import VertexAIEmbeddings
 from settings import get_settings
+from langchain_mongodb import MongoDBAtlasVectorSearch
+from pymongo import MongoClient
 
 settings = get_settings()
 
@@ -38,12 +37,17 @@ def search(query: str):
         location=settings.location,
     )
 
-    client = firestore.Client(project=settings.project_id, database=settings.database)
+    client = MongoClient(settings.mongodb_atlas_cluster_uri)
 
-    vector_store = FirestoreVectorStore(
-        client=client, collection=settings.collection, embedding_service=embedding
+    mongodb_collection = client[settings.db_name][settings.collection_name]
+
+    vector_store = MongoDBAtlasVectorSearch(
+        collection=mongodb_collection,
+        embedding=embedding,
+        index_name=settings.atlas_vector_search_index_name,
+        relevance_score_fn="cosine",
     )
-
+    
     logging.info(f"Now executing query: {query}")
     results: list[Document] = vector_store.similarity_search(
         query=query, k=int(settings.top_k), include_metadata=True
