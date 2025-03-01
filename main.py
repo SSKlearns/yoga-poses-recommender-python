@@ -1,12 +1,12 @@
 import logging
 from flask import Flask, request, jsonify, render_template, make_response
-from google.cloud import firestore
 from langchain_core.documents import Document
-from langchain_google_firestore import FirestoreVectorStore
 from langchain_google_vertexai import VertexAIEmbeddings
 import google.cloud.texttospeech as tts
 import urllib
 from settings import get_settings
+from langchain_mongodb import MongoDBAtlasVectorSearch
+from pymongo import MongoClient
 
 settings = get_settings()
 
@@ -17,21 +17,22 @@ logging.basicConfig(
 app = Flask(__name__)
 
 def search(query: str):
-    """Executes Firestore Vector Similarity Search"""
+    """Executes MongoDB Atlas Vector Similarity Search"""
     embedding = VertexAIEmbeddings(
         model_name=settings.embedding_model_name,
         project=settings.project_id,
         location=settings.location,
     )
 
-    client = firestore.Client(
-        project=settings.project_id, database=settings.database
-    )
+    client = MongoClient(settings.mongodb_atlas_cluster_uri)
 
-    vector_store = FirestoreVectorStore(
-        client=client,
-        collection=settings.collection,
-        embedding_service=embedding,
+    mongodb_collection = client[settings.db_name][settings.collection_name]
+
+    vector_store = MongoDBAtlasVectorSearch(
+        collection=mongodb_collection,
+        embedding=embedding,
+        index_name=settings.atlas_vector_search_index_name,
+        relevance_score_fn="cosine",
     )
 
     logging.info(f"Now executing query: {query}")
