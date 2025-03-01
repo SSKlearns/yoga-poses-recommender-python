@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     collection: str
     test_collection: str
     top_k: int
+    embedding_size: int
+    db_name: str
+    collection_name: str
+    atlas_vector_search_index_name: str
+    mongodb_atlas_cluster_uri: str
     port: int = 8080
 
     model_config = SettingsConfigDict(
